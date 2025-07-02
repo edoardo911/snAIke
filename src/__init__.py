@@ -160,8 +160,6 @@ while True:
 
     action = select_action(model, normalized_state, epsilon)
     snake_dir = action
-
-    epsilon = max(epsilon * epsilon_decay, 0.01)
     
     reward = moveSnake()
     generateFood()
@@ -187,6 +185,7 @@ while True:
     os.system("cls")
 
     if game_over:
+        epsilon = max(epsilon * epsilon_decay, 0.01)
         attempt += 1
         if len(tail) > record:
             record = len(tail)
