@@ -8,6 +8,8 @@ from neural_network.DQN import select_action
 from neural_network.DQN import train
 import torch.optim as optim
 import copy
+import pygame
+import pickle
 
 ID_AIR: int = 0
 ID_WALL: int = 1
@@ -24,9 +26,10 @@ game_map = []
 snake_pos: list = []
 tail: list = []
 snake_dir: int = -1
-attempt: int = 1
+attempt: int = 0
 record: int = 0
 game_over: bool = False
+score_sum: float = 0
 
 print("Loading...")
 
@@ -38,7 +41,14 @@ epsilon = 1.0
 epsilon_decay = 0.995
 
 if os.path.isfile("model.pth"):
+    print("Loading model...")
     model.load_state_dict(torch.load("model.pth"))
+    with open("gamestate.pkl", "rb") as f:
+        data = pickle.load(f)
+        record = data[0]
+        attempt = data[1]
+        score_sum = data[2]
+    print("Model loaded")
     epsilon = 0.01
 
 target_model.load_state_dict(model.state_dict())
@@ -49,6 +59,22 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 training_count = 0
 copy_count = 0
+
+#pygame
+pygame.init()
+screen = pygame.display.set_mode((400, 400))
+pygame.display.set_caption("snAIke")
+clock = pygame.time.Clock()
+
+grass = pygame.image.load("res/grass.png").convert_alpha()
+wall = pygame.image.load("res/wall.png").convert_alpha()
+food = pygame.image.load("res/food.png").convert_alpha()
+snake_tail = pygame.image.load("res/snake_tail.png").convert_alpha()
+snake_head_down = pygame.image.load("res/snake_head.png").convert_alpha()
+snake_head_right = pygame.transform.rotate(snake_head_down, 90)
+snake_head_up = pygame.transform.rotate(snake_head_right, 90)
+snake_head_left = pygame.transform.rotate(snake_head_up, 90)
+font = pygame.font.SysFont("Arial", 14)
 
 def resetState():
     global game_map
@@ -144,19 +170,56 @@ def generateFood():
         y = randrange(7) + 1
     game_map[y][x] = ID_FOOD
 
-resetState()
-os.system("cls")
-while True:
-    x: int = 0
-    y: int = 0
+def drawMap():
+    y = 4
 
-    print("Attempt: " + str(attempt) + ", Score: " + str(len(tail)) + ", Record: " + str(record) + ", Epsilon: " + str(epsilon))
+    screen.fill((0, 0, 0))
+
+    text = "Attempt: " + str(attempt) + ", Score: " + str(len(tail)) + ", Record: " + str(record) + ", Epsilon: " + str(round(epsilon, 3))
+    surface = font.render(text, True, (255, 255, 255))
+    screen.blit(surface, (5, 5))
+
+    text = "Average score: " + str(round(score_sum / attempt, 3)) if attempt != 0 else "0"
+    surface = font.render(text, True, (255, 255, 255))
+    screen.blit(surface, (5, 35))
+
     for row in game_map:
+        x = 2
         for id in row:
-            print(idToChar(id) + ' ', end='',  sep='')
+            image = grass
+            if id == ID_FOOD:
+                screen.blit(image, (x * 16, y * 16))
+                image = food
+            elif id == ID_TAIL:
+                screen.blit(image, (x * 16, y * 16))
+                image = snake_tail
+            elif id == ID_WALL:
+                image = wall
+            elif id == ID_HEAD:
+                screen.blit(image, (x * 16, y * 16))
+                if snake_dir == -1 or snake_dir == DIR_DOWN:
+                    image = snake_head_down
+                elif snake_dir == DIR_LEFT:
+                    image = snake_head_left
+                elif snake_dir == DIR_UP:
+                    image = snake_head_up
+                elif snake_dir == DIR_RIGHT:
+                    image = snake_head_right
+            screen.blit(image, (x * 16, y * 16))
             x += 1
-        print()
         y += 1
+    pygame.display.flip()
+    clock.tick(10)
+
+resetState()
+
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    drawMap()
 
     unnormalized_state = copy.deepcopy(game_map)
     flat_state = [ item for row in unnormalized_state for item in row ]
@@ -204,21 +267,27 @@ while True:
         copy_count += 1
     
     time.sleep(0.05)
-    os.system("cls")
-
     if game_over:
         epsilon = max(epsilon * epsilon_decay, 0.01)
         attempt += 1
+        score_sum += len(tail)
         if len(tail) > record:
             record = len(tail)
-        tail.clear()
         
-        print("Game Over!")
-        print("Score: " + str(len(tail)))
-        if attempt % 1000 == 0:
+        text = "Game Over! Score: " + str(len(tail))
+        surface = font.render(text, True, (255, 0, 0))
+        screen.blit(surface, (192, 120))
+        pygame.display.flip()
+        clock.tick(10)
+
+        if attempt % 1000 == 0 or (attempt > 1000 and attempt % 150 == 0):
             print("Saving model...")
             torch.save(model.state_dict(), "model.pth")
+            with open("gamestate.pkl", "wb") as f:
+                pickle.dump((record, attempt, score_sum), f)
             print("Model saved")
 
+        tail.clear()
         time.sleep(1)
         resetState()
+pygame.quit()
