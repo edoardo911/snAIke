@@ -6,7 +6,7 @@ class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
         self.model = nn.Sequential(
-            nn.Linear(81, 256),
+            nn.Linear(90, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),

@@ -34,6 +34,13 @@ print("Loading...")
 model = DQN()
 target_model = DQN()
 
+epsilon = 1.0
+epsilon_decay = 0.995
+
+if os.path.isfile("model.pth"):
+    model.load_state_dict(torch.load("model.pth"))
+    epsilon = 0.01
+
 target_model.load_state_dict(model.state_dict())
 target_model.eval()
 
@@ -42,9 +49,6 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 training_count = 0
 copy_count = 0
-
-epsilon = 1.0
-epsilon_decay = 0.995
 
 def resetState():
     global game_map
@@ -84,7 +88,7 @@ def moveSnake():
     game_map[snake_pos[1]][snake_pos[0]] = ID_AIR
     x = snake_pos[0]
     y = snake_pos[1]
-    reward = 0
+    reward = 0.02
 
     if snake_dir == DIR_UP:
         y -= 1
@@ -157,6 +161,15 @@ while True:
     unnormalized_state = copy.deepcopy(game_map)
     flat_state = [ item for row in unnormalized_state for item in row ]
     normalized_state = [x / 4 for x in flat_state]
+    normalized_state.append(snake_dir / 3)
+    normalized_state.append(game_map[snake_pos[1] - 1][snake_pos[0] - 1] / 4)
+    normalized_state.append(game_map[snake_pos[1] - 1][snake_pos[0]] / 4)
+    normalized_state.append(game_map[snake_pos[1] - 1][snake_pos[0] + 1] / 4)
+    normalized_state.append(game_map[snake_pos[1]][snake_pos[0] - 1] / 4)
+    normalized_state.append(game_map[snake_pos[1]][snake_pos[0] + 1] / 4)
+    normalized_state.append(game_map[snake_pos[1] + 1][snake_pos[0] - 1] / 4)
+    normalized_state.append(game_map[snake_pos[1] + 1][snake_pos[0]] / 4)
+    normalized_state.append(game_map[snake_pos[1] + 1][snake_pos[0] + 1] / 4)
 
     action = select_action(model, normalized_state, epsilon)
     snake_dir = action
@@ -167,6 +180,15 @@ while True:
     new_unnormalized_state = copy.deepcopy(game_map)
     new_flat_state = [ item for row in new_unnormalized_state for item in row ]
     new_normalized_state = [x / 4 for x in new_flat_state]
+    new_normalized_state.append(snake_dir / 3)
+    new_normalized_state.append(game_map[snake_pos[1] - 1][snake_pos[0] - 1] / 4)
+    new_normalized_state.append(game_map[snake_pos[1] - 1][snake_pos[0]] / 4)
+    new_normalized_state.append(game_map[snake_pos[1] - 1][snake_pos[0] + 1] / 4)
+    new_normalized_state.append(game_map[snake_pos[1]][snake_pos[0] - 1] / 4)
+    new_normalized_state.append(game_map[snake_pos[1]][snake_pos[0] + 1] / 4)
+    new_normalized_state.append(game_map[snake_pos[1] + 1][snake_pos[0] - 1] / 4)
+    new_normalized_state.append(game_map[snake_pos[1] + 1][snake_pos[0]] / 4)
+    new_normalized_state.append(game_map[snake_pos[1] + 1][snake_pos[0] + 1] / 4)
     memory.push(normalized_state, action, reward, new_normalized_state, game_over)
 
     if training_count == 3 or game_over:
@@ -190,6 +212,13 @@ while True:
         if len(tail) > record:
             record = len(tail)
         tail.clear()
+        
         print("Game Over!")
+        print("Score: " + str(len(tail)))
+        if attempt % 1000 == 0:
+            print("Saving model...")
+            torch.save(model.state_dict(), "model.pth")
+            print("Model saved")
+
         time.sleep(1)
         resetState()
