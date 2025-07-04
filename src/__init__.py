@@ -48,8 +48,8 @@ if os.path.isfile("model.pth"):
         record = data[0]
         attempt = data[1]
         score_sum = data[2]
+        epsilon = data[3]
     print("Model loaded")
-    epsilon = 0.01
 
 target_model.load_state_dict(model.state_dict())
 target_model.eval()
@@ -59,6 +59,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 training_count = 0
 copy_count = 0
+default_reward = 0.02
 
 #pygame
 pygame.init()
@@ -111,10 +112,12 @@ def idToChar(id: int):
 def moveSnake():
     global snake_pos
     global game_map
+    global default_reward
+
     game_map[snake_pos[1]][snake_pos[0]] = ID_AIR
     x = snake_pos[0]
     y = snake_pos[1]
-    reward = 0.02
+    reward = default_reward
 
     if snake_dir == DIR_UP:
         y -= 1
@@ -128,12 +131,15 @@ def moveSnake():
         global game_over
         game_over = True
         reward = -1
+        default_reward = 0.02
     else:
         for t in tail:
             game_map[t[1]][t[0]] = ID_AIR
 
+        default_reward *= 0.995
         if checkFood(x, y):
             reward = 1
+            default_reward = 0.02
             tail.append([ snake_pos[0], snake_pos[1] ])
         elif len(tail) > 0:
             for i in range(len(tail) - 1):
@@ -179,7 +185,7 @@ def drawMap():
     surface = font.render(text, True, (255, 255, 255))
     screen.blit(surface, (5, 5))
 
-    text = "Average score: " + str(round(score_sum / attempt, 3)) if attempt != 0 else "0"
+    text = "Efficiency index: " + str(round(score_sum / attempt, 3)) if attempt != 0 else "0"
     surface = font.render(text, True, (255, 255, 255))
     screen.blit(surface, (5, 35))
 
@@ -212,6 +218,7 @@ def drawMap():
     clock.tick(10)
 
 resetState()
+os.system("cls")
 
 running = True
 while running:
@@ -268,7 +275,7 @@ while running:
     
     time.sleep(0.05)
     if game_over:
-        epsilon = max(epsilon * epsilon_decay, 0.01)
+        epsilon = max(epsilon * epsilon_decay, 0.005)
         attempt += 1
         score_sum += len(tail)
         if len(tail) > record:
@@ -280,11 +287,11 @@ while running:
         pygame.display.flip()
         clock.tick(10)
 
-        if attempt % 1000 == 0 or (attempt > 1000 and attempt % 150 == 0):
+        if attempt % 50 == 0:
             print("Saving model...")
             torch.save(model.state_dict(), "model.pth")
             with open("gamestate.pkl", "wb") as f:
-                pickle.dump((record, attempt, score_sum), f)
+                pickle.dump((record, attempt, score_sum, epsilon), f)
             print("Model saved")
 
         tail.clear()
