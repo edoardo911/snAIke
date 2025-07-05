@@ -22,8 +22,9 @@ DIR_RIGHT: int = 1
 DIR_DOWN: int = 2
 DIR_LEFT: int = 3
 
+map_id: int = -1
 game_map = []
-snake_pos: list = []
+snake_pos: list = [ 0, 0 ]
 tail: list = []
 snake_dir: int = -1
 attempt: int = 0
@@ -31,7 +32,27 @@ record: int = 0
 game_over: bool = False
 score_sum: float = 0
 
+die_reward: float = -1
+eat_reward: float = 1
+survive_reward: float = 0.02
+survive_decay: float = 0.9
+
 print("Loading...")
+
+with open("snake.conf", "r") as f:
+    lines = [line.rstrip() for line in f]
+    for line in lines:
+        tokens = line.split("=")
+        if tokens[0] == "map_id":
+            map_id = int(tokens[1])
+        elif tokens[0] == "die_reward":
+            die_reward = float(tokens[1])
+        elif tokens[0] == "eat_reward":
+            eat_reward = float(tokens[1])
+        elif tokens[0] == "survive_reward":
+            survive_reward = float(tokens[1])
+        elif tokens[0] == "survive_decay":
+            survive_decay = float(tokens[1])
 
 #dqn
 model = DQN()
@@ -40,10 +61,10 @@ target_model = DQN()
 epsilon = 1.0
 epsilon_decay = 0.995
 
-if os.path.isfile("model.pth"):
+if os.path.isfile(f"model{map_id}.pth"):
     print("Loading model...")
-    model.load_state_dict(torch.load("model.pth"))
-    with open("gamestate.pkl", "rb") as f:
+    model.load_state_dict(torch.load(f"model{map_id}.pth"))
+    with open(f"gamestate{map_id}.pkl", "rb") as f:
         data = pickle.load(f)
         record = data[0]
         attempt = data[1]
@@ -59,7 +80,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 training_count = 0
 copy_count = 0
-default_reward = 0.02
+default_reward = survive_reward
 
 #pygame
 pygame.init()
@@ -81,20 +102,75 @@ def resetState():
     global game_map
     global snake_pos
     global game_over
+    global default_reward
 
+    default_reward = survive_reward
     game_over = False
-    snake_pos = [ randrange(7) + 1, randrange(7) + 1 ]
-    game_map = [ #9x9
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
-        [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-    ]
+    if map_id == 0:
+        game_map = [ #9x9
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        ]
+    elif map_id == 1:
+        game_map = [ #9x9
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        ]
+    elif map_id == 2:
+        game_map = [ #9x9
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 1, 0, 0, 0, 1, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        ]
+    elif map_id == 3:
+        game_map = [ #9x9
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 1, 1, 0, 0, 0, 0, 0, 1, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 1, 0, 0, 0, 0, 0, 1, 1 ],
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        ]
+    elif map_id == 4:
+        game_map = [ #9x9
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 1, 1, 1, 0, 0, 1 ],
+            [ 1, 0, 1, 1, 1, 1, 1, 0, 1 ],
+            [ 1, 0, 0, 1, 1, 1, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ],
+            [ 1, 0, 0, 0, 0, 0, 0, 0, 1 ],
+            [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
+        ]
+    else:
+        print("Invalid map id!")
+        exit()
+    while game_map[snake_pos[1]][snake_pos[0]] != ID_AIR:
+        snake_pos = [ randrange(7) + 1, randrange(7) + 1 ]
     game_map[snake_pos[1]][snake_pos[0]] = ID_HEAD
 
 def idToChar(id: int):
@@ -130,16 +206,15 @@ def moveSnake():
     if checkGameOver(x, y):
         global game_over
         game_over = True
-        reward = -1
-        default_reward = 0.02
+        reward = die_reward
     else:
         for t in tail:
             game_map[t[1]][t[0]] = ID_AIR
 
-        default_reward *= 0.995
+        default_reward *= survive_decay
         if checkFood(x, y):
-            reward = 1
-            default_reward = 0.02
+            reward = eat_reward
+            default_reward = survive_reward
             tail.append([ snake_pos[0], snake_pos[1] ])
         elif len(tail) > 0:
             for i in range(len(tail) - 1):
@@ -275,7 +350,7 @@ while running:
     
     time.sleep(0.05)
     if game_over:
-        epsilon = max(epsilon * epsilon_decay, 0.005)
+        epsilon = epsilon * epsilon_decay
         attempt += 1
         score_sum += len(tail)
         if len(tail) > record:
@@ -289,8 +364,8 @@ while running:
 
         if attempt % 50 == 0:
             print("Saving model...")
-            torch.save(model.state_dict(), "model.pth")
-            with open("gamestate.pkl", "wb") as f:
+            torch.save(model.state_dict(), f"model{map_id}.pth")
+            with open(f"gamestate{map_id}.pkl", "wb") as f:
                 pickle.dump((record, attempt, score_sum, epsilon), f)
             print("Model saved")
 
